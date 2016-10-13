@@ -93,6 +93,7 @@ believe that my approach is reasonable.
 '''
 
 from common import *
+import numpy as np
 ###############################################################################
 #                             Helper Functions                                #
 
@@ -785,6 +786,38 @@ def get_edge(image_bin, current_pos, trail, known, nodes_center,
                trail.append(current_pos)
                
 
+            # fit a curve using the previous m points
+            m = 5
+            if len(trail) < m:
+               # fit a second order polynomial
+               alpha = np.polyfit(trail[-m:][0], trail[-m:][1], 2)
+               # create the third order solution to find min distance
+               poly = lambda x: [2*alpha[0]**2, 3*alpha[0]*alpha[1],
+                                 1 + 2*alpha[0]*alpha[2] - 2*alpha[0]*x[1] + alpha[1]**2,
+                                 -x[0] + alpha[1]*alpha[2] - alpha[1]*x[1]]
+               euclid = lambda x: lambda z: (z - x[0])**2 + (np.poly1d(a)(z) - x[1])**2
+            else:
+               # fit a first order polynomial
+               alpha = np.polyfit(trail[:][0], trail[:][1], 1)
+               # create the first order solution to find min distance
+               poly = lambda x: [alpha[0]^2 + 1, alpha[0]*alpha[1] - alpha[0]*x[1] - x[0]]
+               euclid = lambda x: lambda z: (z - x[0])**2 + (np.poly1d(a)(z) - x[1])**2
+
+            # calculate min distance to curve for each point
+            best_index = candidate_indices[0]
+            best_dist = float('inf')
+            for i in candidate_indices:
+               # solve roots of polynomial, remove complex values
+               roots = np.roots(poly(n[i]))
+               roots = [root for root in roots if root.imag == 0]
+
+               # see if candidate point matches the curve the best
+               dist = min(map(euclid(n[i]), roots))
+               if dist < best_dist:
+                  best_index = i
+                  best_dist = dist
+
+            """
             # The following codes intend to determine which direction to go.
             vector_list = []
             for i in range(len(trail) - 1): # sums the vectors along the trail
@@ -817,6 +850,7 @@ def get_edge(image_bin, current_pos, trail, known, nodes_center,
                                              starting_index, radius, is_joint,\
                                              image_debug)
                temp += 1
+            """
             return result, new_trail
          
          
