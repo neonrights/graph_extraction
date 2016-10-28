@@ -804,7 +804,7 @@ def get_edge(image_bin, current_pos, trail, known, nodes_center,
                poly = lambda x: [2*alpha[0]**2, 3*alpha[0]*alpha[1],
                                  1 + 2*alpha[0]*alpha[2] - 2*alpha[0]*x[1] + alpha[1]**2,
                                  -x[0] + alpha[1]*alpha[2] - alpha[1]*x[1]]
-               euclid = lambda x: lambda z: (z - x[0])**2 + (np.poly1d(a)(z) - x[1])**2
+               euclid = lambda x: lambda z: (z - x[0])**2 + (np.poly1d(alpha)(z) - x[1])**2
             else:
                # fit a first order polynomial
                alpha = np.polyfit(trail[:][0], trail[:][1], 1)
@@ -864,7 +864,7 @@ def get_edge(image_bin, current_pos, trail, known, nodes_center,
                                              starting_index, radius, is_joint,\
                                              image_debug)
                temp += 1
-
+               
             return result, new_trail
             """         
          
