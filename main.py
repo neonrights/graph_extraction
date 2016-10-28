@@ -44,7 +44,14 @@ def get_image(dir_path, keyword):
          index = int(response)
          if index >= 0 + BASE and index < len(input_dir) + BASE:
             try:
-               image = cv2.imread(dir_path + input_dir[index - BASE])
+               image = cv2.imread(dir_path + input_dir[index - BASE], -1)
+               # change all the transparent pixels to background ones
+               for i in range(image.shape[0]):
+                  for j in range(image.shape[1]):
+                     if image[i][j][3] == 0:
+                        image[i][j][0] = 255
+                        image[i][j][1] = 255
+                        image[i][j][2] = 255
                image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                valid = True
                print("Selected " + keyword + " file: " + 
@@ -86,10 +93,12 @@ def get_images(show_graph = False, show_template = False):
    
    if show_graph:
       cv2.startWindowThread()
+      cv2.namedWindow(GRAPH)
       cv2.imshow(GRAPH, graph)
       cv2.waitKey(1)
    if show_template:
       cv2.startWindowThread()
+      cv2.namedWindow(TEMPLATE)
       cv2.imshow(TEMPLATE, template)
       cv2.waitKey(1)
    break_point = get_threshold(graph_gray)
@@ -162,6 +171,108 @@ def get_kernel_shape(shape_str):
       print("Invalid shape string.")
       return None
 
+def adjust_labels(image_display, window_name, ref_pos, rel_pos,
+                  font_size = FONT_SIZE, font_thickness = FONT_THICKNESS):
+   """Allows the user to adjust some font properties on the displaying image.
+   Parameters
+   ----------
+   image_display : numpy matrix of integers
+      The image that will be used to displayed. Note that this must be the
+      original image possibly with only frames on.
+   window_name : string
+      The name of the displaying window.
+   ref_pos : List[(int, int)]
+      Stores the reference position for text.
+   rel_pos : (int, int)
+      Stores the coordinates relative to each point in ref_pos.
+   font_size : float
+      Stores the font size value.
+   font_thickness : int
+      Stores the font thickness value.
+   Returns
+   -------
+   rel_pos : (int, int)
+      Stores the coordinates relative to each point in ref_pos.
+   font_size : float
+      Stores the font size value.
+   font_thickness : int
+      Stores the font thickness value.
+   """
+   print("Please enter a valid command to adjust font properties, type " +
+         "\"help\" for assistance, or enter " + DONE + " to proceed.")
+   user_input = ''
+   while user_input != DONE:
+      while len(user_input) == 0:
+         user_input = input()
+      input_list = user_input.split()
+      if len(input_list) > 1:
+         if input_list[0] == 'font' and input_list[1] == 'size':
+            if len(input_list) == 2:
+               print("Font size = " + str(font_size))
+            elif is_valid_type(input_list[2], float, "Please provide a " +
+                                 "number for font size"):
+               font_size = float(input_list[2])
+               image_display_c = image_display.copy()
+               label_vertices(image_display_c, ref_pos, rel_pos, font_size,
+                              font_thickness)
+               cv2.imshow(window_name, image_display_c)
+               cv2.waitKey(1)
+            user_input = ''
+         elif input_list[0] == 'font' and input_list[1] == 'thickness':
+            if len(input_list) == 2:
+               print("Font thickness = " + str(font_thickness))
+            elif is_valid_type(input_list[2], int, "Please provide an integer!"):
+               font_thickness = int(input_list[2])
+               image_display_c = image_display.copy()
+               label_vertices(image_display_c, ref_pos, rel_pos, font_size,
+                              font_thickness)
+               cv2.imshow(window_name, image_display_c)
+               cv2.waitKey(1)
+            user_input = ''
+         elif input_list[0] == 'text' and input_list[1] == 'position':
+            if len(input_list) == 2:
+               print("Currently the texts are at " + str(rel_pos) +
+                        " relative to the top-right corner of the frames.")
+            elif len(input_list) == 4:
+               directions = {'up' : -1, 'left' : -1, 'down' : 1, 'right' : 1}
+               if input_list[2] in directions and \
+                  is_valid_type(input_list[3], int,\
+                  "Please provide an integer to indicate the amount of units."):
+                  dir = input_list[2]
+                  val = int(input_list[3])
+                  if dir == 'left' or dir == 'right':
+                     rel_pos = (rel_pos[0] + directions[dir] * val, rel_pos[1])
+                  else:
+                     rel_pos = (rel_pos[0], rel_pos[1] + directions[dir] * val)
+                  image_display_c = image_display.copy()
+                  label_vertices(image_display_c, ref_pos, rel_pos, font_size,
+                                 font_thickness)
+                  cv2.imshow(window_name, image_display_c)
+                  cv2.waitKey(1)
+            user_input = ''
+         else:
+            print("Invalid command, please try again.")
+            user_input = ''
+      elif user_input[0] == 'h' or user_input[0] == 'H':
+         user_input = ''
+         print("There are three properties that can be adjusted here:")
+         print("font size, font thickness, and text position.")
+         print("Should you enter any of these key terms, the current value " +
+               "would be displayed.")
+         print("If you want to adjust the font size to some number x, please" +
+               " enter \"font size x\".")
+         print("If you want to adjust the font thickness to some number n, " +
+               "please enter \"font thickness n\".")
+         print("If you want to adjust the text position to some " + 
+               "direction(up, down, left, or right) dir for \nsome distance " +
+               "d, please enter \"text position dir d\".")
+         print("Also note that the font thickness value and the distance " +
+               "value should both be integers.")
+      elif user_input != DONE:
+         print("Invalid command, please try again.")
+         user_input = ''
+   return rel_pos, font_size, font_thickness
+         
 
 def find_vertices(image_display, image_work, template, tW, tH):
    """Repeated asks the user for the amount of undetected vertices in the
@@ -180,51 +291,67 @@ def find_vertices(image_display, image_work, template, tW, tH):
    -------
    nodes : List[(int, int)]
       Stores the upper-right coordinates of the detected vertices.
+   rel_pos : (int, int)
+      Stores the coordinates relative to each point in ref_pos.
+   font_size : float
+      Stores the font size value.
+   font_thickness : int
+      Stores the font thickness value.
    """
-   image_display2 = image_display.copy() # will be used in the removing part
+   image_display2 = image_display.copy()
    nodes = [] # stores the upper-left coordinates of the vertices
    nodes_center = [] # stores the center coordinates of the vertices
+   rel_pos = (int(tW / 3), int(tH * 2 / 3))
    user_input = 1
    while user_input > 0:
       user_input = input("How many vertices are you looking for?(0 means " + 
-         "done) ")
-      try:
-         user_input = int(user_input)
-      except:
-         user_input = PLACE_HOLDER_INT
-         print("Cannot recognize the input, please provide a number.")
-      while user_input < 0:
-         user_input = input("How many vertices are you looking for?(0 means" + 
-            " done) ")
-         try:
+         "done)")
+      if len(user_input) > 0:
+         if is_valid_type(user_input, int, "Cannot recognize the input, " +
+                           "please provide a number."):
             user_input = int(user_input)
-         except:
-            user_input = PLACE_HOLDER_INT
-            print("\nCannot recognize the input, please provide a number.")
-            
-      locate_vertices(user_input, image_work, template, tW, tH, nodes)
-      draw_vertices(image_display, nodes, tW, tH, False)
-      cv2.startWindowThread()
-      cv2.imshow("Vertices", image_display)
-      cv2.waitKey(1)
-      print("Current vertices:")
-      print_list(nodes)
+            if user_input >= 0:
+               locate_vertices(user_input, image_work, template, tW, tH, nodes)
+               highlight_vertices(image_display2, nodes, tW, tH)
+               image_display3 = image_display2.copy()
+               label_vertices(image_display3, nodes, rel_pos)
+               cv2.startWindowThread()
+               cv2.namedWindow("Vertices")
+               cv2.imshow("Vertices", image_display3)
+               cv2.waitKey(1)
+               print("Current vertices:")
+               print_list(nodes)
+            elif user_input < 0:
+               print("Please provide a non-negative integer.")
+               user_input = PLACE_HOLDER_INT
+      else:
+         user_input = 1
       
    cv2.destroyWindow(GRAPH)
    cv2.destroyWindow("Vertices")
    
+
+   cv2.startWindowThread()
+   cv2.namedWindow("Vertices with Labels")
+   cv2.imshow("Vertices with Labels", image_display3)
+   cv2.waitKey(1)
+   rel_pos, font_size, font_thickness = adjust_labels(image_display2.copy(),
+      "Vertices with Labels", nodes, rel_pos)
+   
    # attempts to remove all the false vertices
    user_input = ''
    while not user_input == DONE:
-      image_display3 = image_display2.copy()
-      draw_vertices(image_display3, nodes, tW, tH)
+      image_display4 = image_display.copy()
+      highlight_vertices(image_display4, nodes, tW, tH)
+      label_vertices(image_display4, nodes, rel_pos, font_size, font_thickness)
       cv2.startWindowThread()
-      cv2.imshow("Vertices with Labels", image_display3)
+      cv2.namedWindow("Vertices with Labels")
+      cv2.imshow("Vertices with Labels", image_display4)
       cv2.waitKey(1)
       user_input = ''
       user_input = get_valid_list(user_input, "Indicate non-vertex elements " +
-                                    "in the list in a sequence of indices " +
-                                    "or \"done\" to proceed to next step:\n",\
+                                    "in a sequence of indices, enter " +
+                                    "\"done\" to proceed to the next step:\n",\
                                     len(nodes))
       if user_input != DONE:
          nodes = remove_nodes(user_input, nodes)
@@ -234,10 +361,10 @@ def find_vertices(image_display, image_work, template, tW, tH):
    
    print("Current vertices:")
    print_list(nodes)
-   return nodes
+   return nodes, rel_pos, font_size, font_thickness
 
 
-def sort_vertices(nodes, image_display):
+def sort_vertices(nodes, image_display, window_name, rel_pos, font_size, font_thickness):
    """Interacts with the user to sort the vertices.
    Parameters
    ----------
@@ -245,6 +372,14 @@ def sort_vertices(nodes, image_display):
       Stores the upper-right coordinates of the detected vertices.
    image_display : numpy matrix of integers
       The image that is intended to be displayed to the user.
+   window_name : string
+      The name of the window that is used to display the image.
+   rel_pos : (int, int)
+      Stores the coordinates relative to each point in ref_pos.
+   font_size : float
+      Stores the font size value.
+   font_thickness : int
+      Stores the font thickness value.
    Returns
    -------
    nodes : List[(int, int)]
@@ -323,10 +458,12 @@ def sort_vertices(nodes, image_display):
             for i in range(len(index_list)):
                result[index_list[i] - BASE] = nodes[i]
             nodes = result
-            draw_vertices(image_display, nodes, tW, tH)
+            highlight_vertices(image_display, nodes, tW, tH)
+            label_vertices(image_display, nodes, rel_pos, font_size,
+                           font_thickness)
             cv2.startWindowThread()
-            cv2.destroyWindow("Vertices with Labels")
-            cv2.imshow("Vertices with Labels", image_display)
+            cv2.namedWindow(window_name)
+            cv2.imshow(window_name, image_display)
             cv2.waitKey(1)
             print("Updated list of vertices:")
             print_list(nodes)
@@ -486,6 +623,9 @@ def extract_edges(image_work, nodes_center, radius):
    """
    E = []
    endpoints = get_endpoints(image_work, nodes_center, radius)
+   deg_seq = []
+   for i in range(len(endpoints)):
+      deg_seq.append(len(endpoints[i]))
    trails = []
 
    for i in range(len(endpoints)):
@@ -512,7 +652,7 @@ def extract_edges(image_work, nodes_center, radius):
    show_binary_image(image_temp, "trails", True)
    '''
    
-   return E
+   return E, deg_seq
 
 def display_edges(E):
    """Shows all the edges.
@@ -541,10 +681,12 @@ if __name__ == "__main__":
    
    # Find all the vertices. In particular variable nodes stores a list of
    # nodes' upper-right corner.
-   nodes = find_vertices(graph.copy(), graph_gray.copy(), template, tW, tH)
+   nodes, rel_pos, font_size, font_thickness =\
+      find_vertices(graph.copy(), graph_gray.copy(), template, tW, tH)
    
    # If neccesary, sort the vertices such that the order matches the given one.
-   nodes = sort_vertices(nodes, graph.copy())
+   nodes = sort_vertices(nodes, graph.copy(), "Vertices with Labels", rel_pos,
+                           font_size, font_thickness)
    
    nodes_center = get_center_pos(nodes, tW, tH)
    
@@ -552,7 +694,7 @@ if __name__ == "__main__":
    while not complete:
       graph_work = noise_reduction(graph_gray, break_point, nodes_center,\
                                     radius)
-      E = extract_edges(graph_work, nodes_center, radius)
+      E, deg_seq = extract_edges(graph_work, nodes_center, radius)
       display_edges(E)
       user_input = ''
       while len(user_input) == 0:
