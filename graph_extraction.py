@@ -826,6 +826,11 @@ def get_edge(image_bin, current_pos, trail, known, nodes_center,
                   best_index = i
                   best_dist = dist
 
+            trail.append(candidate_indices[best_index])
+            return get_edge(image_bin, candidate_indices[best_index], trail,\
+                            known, nodes_center, starting_index, radius,\
+                            is_joint, image_debug)
+
             """
             # The following codes intend to determine which direction to go.
             vector_list = []
@@ -859,9 +864,9 @@ def get_edge(image_bin, current_pos, trail, known, nodes_center,
                                              starting_index, radius, is_joint,\
                                              image_debug)
                temp += 1
-            """
+
             return result, new_trail
-         
+            """         
          
 #                               End of Section                                #
 ###############################################################################
